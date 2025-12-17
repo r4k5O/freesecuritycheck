@@ -4,6 +4,7 @@ import { Bell, Shield, Mail, CheckCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const Subscribe = () => {
   const [email, setEmail] = useState("");
@@ -25,15 +26,34 @@ const Subscribe = () => {
 
     setIsLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    setIsLoading(false);
-    setIsSubscribed(true);
-    toast({
-      title: "Successfully Subscribed!",
-      description: "You'll receive alerts when new breaches are found.",
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke('subscribe', {
+        body: { email }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setIsSubscribed(true);
+        toast({
+          title: data.alreadySubscribed ? "Already Subscribed!" : "Successfully Subscribed!",
+          description: data.alreadySubscribed 
+            ? "You're already signed up for breach alerts."
+            : "You'll receive alerts when new breaches are found.",
+        });
+      } else {
+        throw new Error(data.error || 'Failed to subscribe');
+      }
+    } catch (error) {
+      console.error('Subscription error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to subscribe. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (isSubscribed) {

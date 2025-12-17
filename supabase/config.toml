@@ -1,1 +1,13 @@
 project_id = "diwkvlcopclcetaoathe"
+
+[functions.check-email]
+verify_jwt = false
+
+[functions.subscribe]
+verify_jwt = false
+
+[functions.generate-blog]
+verify_jwt = false
+
+[functions.crawl-breaches]
+verify_jwt = false
