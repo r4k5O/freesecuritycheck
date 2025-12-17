@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BreachResult } from "@/components/BreachResult";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface Breach {
   id: string;
@@ -12,39 +13,10 @@ export interface Breach {
   breachDate: string;
   exposedData: string[];
   description: string;
-  blogSlug?: string;
+  affectedCount?: string;
+  severity?: string;
+  blogSlug?: string | null;
 }
-
-// Mock data for demonstration
-const mockBreaches: Breach[] = [
-  {
-    id: "1",
-    name: "LinkedIn",
-    domain: "linkedin.com",
-    breachDate: "2021-06-22",
-    exposedData: ["Email addresses", "Phone numbers", "Names", "Job titles"],
-    description: "In June 2021, data from 700 million LinkedIn users was posted for sale.",
-    blogSlug: "linkedin-2021-breach"
-  },
-  {
-    id: "2",
-    name: "Adobe",
-    domain: "adobe.com",
-    breachDate: "2013-10-04",
-    exposedData: ["Email addresses", "Password hints", "Usernames"],
-    description: "In October 2013, Adobe suffered a breach affecting 153 million accounts.",
-    blogSlug: "adobe-2013-breach"
-  },
-  {
-    id: "3",
-    name: "Dropbox",
-    domain: "dropbox.com",
-    breachDate: "2012-07-01",
-    exposedData: ["Email addresses", "Hashed passwords"],
-    description: "In 2012, Dropbox suffered a data breach exposing 68 million accounts.",
-    blogSlug: "dropbox-2012-breach"
-  }
-];
 
 export const EmailChecker = () => {
   const [email, setEmail] = useState("");
@@ -68,25 +40,41 @@ export const EmailChecker = () => {
     setIsLoading(true);
     setHasSearched(true);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      const { data, error } = await supabase.functions.invoke('check-email', {
+        body: { email }
+      });
 
-    // For demo: randomly show breaches or clean result
-    const hasBreaches = email.toLowerCase().includes("test") || Math.random() > 0.5;
-    setBreaches(hasBreaches ? mockBreaches : []);
-    setIsLoading(false);
+      if (error) throw error;
 
-    if (hasBreaches) {
+      if (data.success) {
+        setBreaches(data.breaches || []);
+        
+        if (data.breaches && data.breaches.length > 0) {
+          toast({
+            title: "Breaches Found",
+            description: `Your email was found in ${data.breaches.length} data ${data.breaches.length === 1 ? 'breach' : 'breaches'}.`,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Good News!",
+            description: "Your email was not found in any known breaches.",
+          });
+        }
+      } else {
+        throw new Error(data.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error('Error checking email:', error);
       toast({
-        title: "Breaches Found",
-        description: `Your email was found in ${mockBreaches.length} data breaches.`,
+        title: "Error",
+        description: "Failed to check email. Please try again.",
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Good News!",
-        description: "Your email was not found in any known breaches.",
-      });
+      setBreaches([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 

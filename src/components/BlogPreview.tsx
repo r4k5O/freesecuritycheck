@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Calendar, Clock } from "lucide-react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface BlogPost {
   slug: string;
@@ -11,37 +13,92 @@ export interface BlogPost {
   affectedUsers: string;
 }
 
-const featuredPosts: BlogPost[] = [
-  {
-    slug: "linkedin-2021-breach",
-    title: "LinkedIn Data Breach: 700 Million Users Exposed",
-    excerpt: "In June 2021, data scraped from LinkedIn was posted for sale, exposing personal information of 700 million users including emails, phone numbers, and professional details.",
-    date: "2024-01-15",
-    readTime: "5 min read",
-    breachName: "LinkedIn",
-    affectedUsers: "700M"
-  },
-  {
-    slug: "adobe-2013-breach",
-    title: "Adobe Breach Analysis: Lessons from 153 Million Accounts",
-    excerpt: "The 2013 Adobe breach remains one of the largest in history. Learn how weak encryption practices led to massive exposure and what we can learn from it.",
-    date: "2024-01-10",
-    readTime: "7 min read",
-    breachName: "Adobe",
-    affectedUsers: "153M"
-  },
-  {
-    slug: "dropbox-2012-breach",
-    title: "Dropbox 2012: How a Reused Password Led to 68 Million Leaked Accounts",
-    excerpt: "An employee's reused password gave attackers access to user credentials. This breach highlights the critical importance of unique passwords.",
-    date: "2024-01-05",
-    readTime: "4 min read",
-    breachName: "Dropbox",
-    affectedUsers: "68M"
-  }
-];
-
 export const BlogPreview = () => {
+  const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('blog_posts')
+          .select(`
+            slug,
+            title,
+            excerpt,
+            created_at,
+            read_time,
+            breaches (
+              name,
+              affected_count
+            )
+          `)
+          .eq('is_published', true)
+          .order('created_at', { ascending: false })
+          .limit(3);
+
+        if (error) throw error;
+
+        const formattedPosts: BlogPost[] = (data || []).map((post: any) => ({
+          slug: post.slug,
+          title: post.title,
+          excerpt: post.excerpt,
+          date: post.created_at,
+          readTime: post.read_time || '5 min read',
+          breachName: post.breaches?.name || 'Unknown',
+          affectedUsers: post.breaches?.affected_count || 'Unknown'
+        }));
+
+        setPosts(formattedPosts);
+      } catch (error) {
+        console.error('Error fetching blog posts:', error);
+        // Fallback to showing breach data if no blog posts exist
+        const { data: breaches } = await supabase
+          .from('breaches')
+          .select('*')
+          .order('breach_date', { ascending: false })
+          .limit(3);
+
+        if (breaches) {
+          setPosts(breaches.map(b => ({
+            slug: `${b.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${b.breach_date?.split('-')[0]}`,
+            title: `${b.name} Data Breach: ${b.affected_count || 'Millions of'} Users Affected`,
+            excerpt: b.description || `Analysis of the ${b.name} data breach.`,
+            date: b.created_at,
+            readTime: '5 min read',
+            breachName: b.name,
+            affectedUsers: b.affected_count || 'Unknown'
+          })));
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPosts();
+  }, []);
+
+  if (loading) {
+    return (
+      <section className="py-16 bg-secondary border-y-2 border-foreground">
+        <div className="container mx-auto px-4">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-muted rounded w-1/4"></div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-64 bg-muted border-2 border-foreground"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (posts.length === 0) {
+    return null;
+  }
+
   return (
     <section className="py-16 bg-secondary border-y-2 border-foreground">
       <div className="container mx-auto px-4">
@@ -60,7 +117,7 @@ export const BlogPreview = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {featuredPosts.map((post) => (
+          {posts.map((post) => (
             <article 
               key={post.slug}
               className="border-2 border-foreground bg-card shadow-sm hover:shadow-md transition-all group"
